@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Данные генерируются командой `python -m analytics.data` и полностью
+# воспроизводятся из SEED, поэтому в репозитории им делать нечего.
+data/
+
+.DS_Store
+.idea/
+.vscode/
