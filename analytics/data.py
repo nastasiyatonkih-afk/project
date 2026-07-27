@@ -66,7 +66,7 @@ CITIES = {
 # дальше. Именно из-за неё каналы отличаются не только ценой привлечения.
 CHANNELS = {
     "Яндекс.Директ": (0.24, 620, +0.10),
-    "VK Реклама": (0.26, 310, -0.50),
+    "VK Реклама": (0.26, 420, -1.15),
     "органика": (0.20, 0, +0.40),
     "реферальная программа": (0.12, 450, +0.55),
     "Telegram-блогеры": (0.10, 540, -0.05),
@@ -196,23 +196,29 @@ def make_orders(users: pd.DataFrame, ab: pd.DataFrame) -> pd.DataFrame:
 
         # --- шаг 2: как часто и как долго он будет заказывать --------------
         rate_per_month = np.exp(0.15 + 0.55 * u.quality) * 1.6
-        months_left = (DATA_END - first_date).days / 30.0
+        lifetime_days = r.exponential(62 * np.exp(0.30 * u.quality))
 
         first_delivery = r.lognormal(np.log(34 * city_time_mult), 0.35)
         if first_delivery > LATE_DELIVERY_MIN:
             # Долгая первая доставка — главный операционный убийца retention.
-            rate_per_month *= 0.68
+            lifetime_days *= 0.68
 
         group = ab_map.get(u.user_id)
-        n_extra = r.poisson(max(rate_per_month * months_left * 0.55, 0))
 
         # --- шаг 3: раскидываем заказы по времени -------------------------
+        last_day = min(first_date + dt.timedelta(days=int(lifetime_days)), DATA_END)
         dates = [first_date]
         cursor = first_date
-        for _ in range(n_extra):
-            gap = max(1, int(r.exponential(30.0 / max(rate_per_month, 0.3))))
+        while True:
+            # В тесте порог бесплатной доставки ниже, поэтому заказывают чаще.
+            in_window = (
+                group == "test"
+                and AB_START <= cursor < AB_START + dt.timedelta(days=AB_HORIZON_DAYS)
+            )
+            rate_boost = 1.12 if in_window else 1.0
+            gap = max(1, int(r.exponential(30.0 / max(rate_per_month * rate_boost, 0.3))))
             cursor = cursor + dt.timedelta(days=gap)
-            if cursor > DATA_END:
+            if cursor > last_day:
                 break
             dates.append(cursor)
 
